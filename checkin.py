@@ -1,15 +1,20 @@
 import requests
-import os  # 新增：用于读取环境变量
 from lxml import etree
+import os # 导入 os 模块，用于访问环境变量
 
 # --- 配置参数 ---
 login_url = "https://vip.ioshashiqi.com/aspx3/mobile/login.aspx"
 qiandao_url = "https://vip.ioshashiqi.com/aspx3/mobile/qiandao.aspx?action=list&s=&no="
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
 
-# 从环境变量获取用户名和密码（GitHub Actions 中配置）
-USERNAME = os.getenv("CHECKIN_USERNAME")  # 环境变量名自定义，需和 Secrets 一致
-PASSWORD = os.getenv("CHECKIN_PASSWORD")
+# 从环境变量中获取用户名和密码
+# 如果环境变量不存在，则使用空字符串作为默认值（本地测试时可能会出现）
+USERNAME = os.environ.get('IOSHASHIQI_USERNAME', '')
+PASSWORD = os.environ.get('IOSHASHIQI_PASSWORD', '')
+
+if not USERNAME or not PASSWORD:
+    print("错误：无法获取用户名或密码。请确保已在 GitHub Secrets 中设置 'IOSHASHIQI_USERNAME' 和 'IOSHASHIQI_PASSWORD'，或在本地设置环境变量。")
+    exit(1) # 如果敏感信息缺失，程序直接退出
 
 # 通用请求头
 common_headers = {
@@ -20,7 +25,12 @@ common_headers = {
     "Upgrade-Insecure-Requests": "1"
 }
 
-session = requests.Session()  # 使用 Session 保持会话和 Cookies
+session = requests.Session() # 使用 Session 保持会话和 Cookies
+
+# 定义一个辅助函数，安全地获取XPath结果
+def get_xpath_value(parser, xpath_str, default=''):
+    result = parser.xpath(xpath_str)
+    return result[0] if result else default
 
 # ================== 第一步：执行登录操作 ==================
 print("--- 执行登录操作 ---")
@@ -29,9 +39,6 @@ login_page_response = session.get(login_url, headers=common_headers)
 login_page_parser = etree.HTML(login_page_response.text)
 
 # 1.2 提取登录表单所需隐藏字段和控件名称
-get_xpath_value = lambda parser, xpath_str, default='': \
-    (result := parser.xpath(xpath_str)) and result[0] or default
-
 viewstate = get_xpath_value(login_page_parser, '//input[@name="__VIEWSTATE"]/@value')
 eventvalidation = get_xpath_value(login_page_parser, '//input[@name="__EVENTVALIDATION"]/@value')
 user_name_attr = get_xpath_value(login_page_parser, '//*[@id="txtUser_sign_in"]/@name', 'txtUser_sign_in')
@@ -48,24 +55,24 @@ login_post_data = {
     login_button_name: login_button_value,
 }
 
-# 1.4 设置 POST 请求头
+# 1.4 设置 POST 请求头 (包含 Referer 和 Content-Type)
 login_post_headers = {
     **common_headers,
     "Content-Type": "application/x-www-form-urlencoded",
-    "Referer": login_url
+    "Referer": login_url # 模拟从登录页提交
 }
 
 # 1.5 发送登录 POST 请求
 login_result_response = session.post(login_url, headers=login_post_headers, data=login_post_data, allow_redirects=False)
 
-# 1.6 验证登录是否成功
+# 1.6 验证登录是否成功 (通过检查重定向状态码和目标URL)
 if login_result_response.status_code == 302 and 'location' in login_result_response.headers:
     print(f"登录成功！重定向至: {login_result_response.headers['location']}")
 else:
     print("登录可能失败，请检查用户名、密码或表单提交参数。")
     print("登录响应状态码:", login_result_response.status_code)
     print("登录响应内容 (部分):", login_result_response.text[:500])
-    exit("登录失败，程序终止。")
+    exit("登录失败，程序终止。") # 登录失败则退出
 
 
 # ================== 第二步：访问签到页面并模拟点击签到按钮 ==================
@@ -78,6 +85,7 @@ qiandao_page_parser = etree.HTML(qiandao_page_response.text)
 # 2.2 提取签到页面所需的隐藏字段和按钮信息
 qiandao_viewstate = get_xpath_value(qiandao_page_parser, '//input[@name="__VIEWSTATE"]/@value')
 qiandao_eventvalidation = get_xpath_value(qiandao_page_parser, '//input[@name="__EVENTVALIDATION"]/@value')
+
 qiandao_button_name = get_xpath_value(qiandao_page_parser, '//input[@type="submit" and @value="签到"]/@name', 'btnSign')
 qiandao_button_value = get_xpath_value(qiandao_page_parser, f'//input[@name="{qiandao_button_name}"]/@value', '签到')
 
@@ -90,23 +98,23 @@ print(f"签到按钮 name: {qiandao_button_name}, value: {qiandao_button_value}"
 qiandao_post_data = {
     "__VIEWSTATE": qiandao_viewstate,
     "__EVENTVALIDATION": qiandao_eventvalidation,
-    qiandao_button_name: qiandao_button_value,
+    qiandao_button_name: qiandao_button_value, # 提交点击按钮的信息
 }
 
-# 2.4 设置 POST 请求头
+# 2.4 设置 POST 请求头 (referer指向当前页面)
 qiandao_post_headers = {
     **common_headers,
     "Content-Type": "application/x-www-form-urlencoded",
-    "Referer": qiandao_url
+    "Referer": qiandao_url # 模拟从签到页面提交
 }
 
 # 2.5 发送点击签到按钮的 POST 请求
 qiandao_result_response = session.post(qiandao_url, headers=qiandao_post_headers, data=qiandao_post_data, allow_redirects=True)
 
 print("\n--- 点击签到按钮后的页面内容 ---")
-print(qiandao_result_response.text[:1000])
+print(qiandao_result_response.text[:1000]) # 打印前1000字符查看结果
 
-# 检查签到是否成功
+# 检查签到是否成功 (示例：检查页面中是否出现“签到成功”之类的文字)
 if "签到成功" in qiandao_result_response.text or "您已签到" in qiandao_result_response.text:
     print("\n>>> 自动签到可能成功！ <<<")
 else:
