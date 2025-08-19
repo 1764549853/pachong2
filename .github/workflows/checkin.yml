@@ -31,4 +31,4 @@ jobs:
           IOSHASHIQI_USERNAME: ${{ secrets.IOSHASHIQI_USERNAME }}
           IOSHASHIQI_PASSWORD: ${{ secrets.IOSHASHIQI_PASSWORD }}
         run: |
-          python your_script_name.py # 将 'checkin.py' 替换为你的 Python 文件名，例如 'ai3.py'
+          python checkin.py # 将 'checkin.py' 替换为你的 Python 文件名，例如 'ai3.py'
