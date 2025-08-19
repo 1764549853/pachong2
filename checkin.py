@@ -11,10 +11,6 @@ user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 USERNAME = os.getenv("CHECKIN_USERNAME")  # 环境变量名自定义，需和 Secrets 一致
 PASSWORD = os.getenv("CHECKIN_PASSWORD")
 
-# 校验参数是否存在
-if not USERNAME or not PASSWORD:
-    exit("错误：未配置用户名或密码！请检查 GitHub Secrets 是否正确设置。")
-
 # 通用请求头
 common_headers = {
     "Accept-Language": "zh-CN,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6",
